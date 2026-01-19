@@ -1,7 +1,5 @@
 # Ralph Wiggum
 
-Autonomous coding loop for [OpenCode](https://opencode.ai). One task, one commit, fresh context per iteration.
-
 ```
   ____       _       _       __        ___                       
  |  _ \ __ _| |_ __ | |__    \ \      / (_) __ _ _   _ _   _ _ __ 
@@ -11,11 +9,25 @@ Autonomous coding loop for [OpenCode](https://opencode.ai). One task, one commit
               |_|                          |___/                   
 ```
 
+This is a near-vanilla implementation of the [Ralph Wiggum autonomous loop](https://ghuntley.com/ralph/) pattern by Geoffrey Huntley. The core idea: run an AI coding agent in a loop where each iteration gets fresh context, picks exactly one task, implements it, validates it passes all checks, commits, and repeats until done. This produces clean atomic commits and avoids context window bloat.
+
+Built for [OpenCode](https://opencode.ai), but should work with any CLI-based coding agent that can read files and run commands.
+
+**Additions to the original pattern:**
+- `npx` initialization that scaffolds everything into a `.ralph/` directory
+- Structured logging with timestamps (`.ralph/logs/ralph.log`)
+- `--verbose` flag to preserve full agent output per iteration
+- Enforces exactly one commit per iteration (fails if zero or multiple)
+- Verifies clean working tree after each iteration
+- Phases-based `IMPLEMENTATION_PLAN.md` template
+
+---
+
 ## What is this?
 
-Ralph Wiggum runs OpenCode in a loop, where each iteration:
+Ralph Wiggum runs your coding agent in a loop, where each iteration:
 
-1. Starts with **fresh context** (new `opencode run` process)
+1. Starts with **fresh context** (new process, no memory of previous iterations)
 2. Picks **exactly one task** from your implementation plan
 3. Implements it and runs **validation gates** (lint, test, build)
 4. Creates **exactly one commit** (local only, no push)
@@ -41,7 +53,7 @@ This approach keeps context focused and produces clean, atomic commits.
 
 ## Prerequisites
 
-- [OpenCode CLI](https://opencode.ai) installed and configured
+- [OpenCode CLI](https://opencode.ai) installed and configured (or another CLI agent)
 - Node.js 18+
 - Git repository
 - **AGENTS.md file in your repo root** (see below)
@@ -90,7 +102,7 @@ See [OpenCode AGENTS.md documentation](https://opencode.ai/docs/agents-md) for b
 
 ```bash
 cd your-project
-npx ralph-wiggum init
+npx @wavilikhin/ralph-wiggum init
 ```
 
 This creates a `.ralph/` directory with:
@@ -334,6 +346,10 @@ This often indicates the model isn't capable enough for autonomous operation. Tr
 - Using `anthropic/claude-opus-4-20250514` or `openai/gpt-5.2`
 - Simplifying tasks in IMPLEMENTATION_PLAN.md
 - Adding more context to AGENTS.md
+
+## Credits
+
+Based on the [Ralph Wiggum pattern](https://ghuntley.com/ralph/) by Geoffrey Huntley.
 
 ## License
 
