@@ -1,5 +1,8 @@
 # Ralph Wiggum
 
+[![npm version](https://img.shields.io/npm/v/@wavilikhin/ralph-wiggum.svg)](https://www.npmjs.com/package/@wavilikhin/ralph-wiggum)
+[![npm publish](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml/badge.svg)](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml)
+
 ```
   ____       _       _       __        ___                       
  |  _ \ __ _| |_ __ | |__    \ \      / (_) __ _ _   _ _   _ _ __ 
@@ -8,6 +11,28 @@
  |_| \_\__,_|_| .__/|_| |_|     \_/\_/  |_|\__, |\__,_|\__,_|_| |_|
               |_|                          |___/                   
 ```
+
+## Installation
+
+```bash
+# npm
+npx @wavilikhin/ralph-wiggum init
+
+# bun
+bunx @wavilikhin/ralph-wiggum init
+```
+
+Or install globally:
+
+```bash
+# npm
+npm install -g @wavilikhin/ralph-wiggum
+
+# bun
+bun install -g @wavilikhin/ralph-wiggum
+```
+
+---
 
 This is a near-vanilla implementation of the [Ralph Wiggum autonomous loop](https://ghuntley.com/ralph/) pattern by Geoffrey Huntley. The core idea: run an AI coding agent in a loop where each iteration gets fresh context, picks exactly one task, implements it, validates it passes all checks, commits, and repeats until done. This produces clean atomic commits and avoids context window bloat.
 
