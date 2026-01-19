@@ -20,10 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Setup npm for OIDC Trusted Publishing
-        uses: npm/setup-registry@v2
-        with:
           registry-url: "https://registry.npmjs.org"
 
       - name: Validate tag matches package.json version
@@ -56,4 +52,6 @@ jobs:
         run: npm pack --dry-run
 
       - name: Publish to npm (OIDC provenance)
+        env:
+          NODE_AUTH_TOKEN: ""
         run: npm publish --provenance
