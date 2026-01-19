@@ -1,5 +1,5 @@
 {
-  "name": "ralph-wiggum",
+  "name": "@wavilikhin/ralph-wiggum",
   "version": "0.1.0",
   "description": "Autonomous coding loop for OpenCode - one task, one commit, fresh context per iteration",
   "type": "module",
@@ -18,11 +18,11 @@
     "agent",
     "loop"
   ],
-  "author": "",
+  "author": "wavilikhin",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-username/ralph-wiggum.git"
+    "url": "git+https://github.com/wavilikhin/ralph-wiggum.git"
   },
   "engines": {
     "node": ">=18.0.0"
