@@ -22,7 +22,7 @@ jobs:
           node-version: "20"
 
       - name: Setup npm for OIDC Trusted Publishing
-        uses: npm/actions/setup-registry@v2
+        uses: npm/setup-registry@v2
         with:
           registry-url: "https://registry.npmjs.org"
 
