@@ -1,10 +1,10 @@
 {
   "name": "@wavilikhin/ralph-wiggum",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Autonomous coding loop for OpenCode - one task, one commit, fresh context per iteration",
   "type": "module",
   "bin": {
-    "ralph-wiggum": "./src/cli.js"
+    "ralph-wiggum": "src/cli.js"
   },
   "files": [
     "src/",
@@ -26,5 +26,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

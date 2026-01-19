@@ -2,10 +2,9 @@ name: Publish to npm
 
 on:
   push:
-    branches:
-      - master
-    paths:
-      - 'package.json'
+    tags:
+      - "v*"
+  workflow_dispatch: {}
 
 jobs:
   publish:
@@ -20,24 +19,37 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
-      - name: Check if version changed
-        id: version
+      - name: Validate tag matches package.json version
         run: |
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          NPM_VERSION=$(npm view @wavilikhin/ralph-wiggum version 2>/dev/null || echo "0.0.0")
-          if [ "$CURRENT_VERSION" != "$NPM_VERSION" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Version changed: $NPM_VERSION -> $CURRENT_VERSION"
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "Version unchanged: $CURRENT_VERSION"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+
+          echo "package.json version: ${PKG_VERSION}"
+          echo "git tag version:     ${TAG_VERSION}"
+
+          if [ "${PKG_VERSION}" != "${TAG_VERSION}" ]; then
+            echo "Tag v${TAG_VERSION} does not match package.json version ${PKG_VERSION}" >&2
+            exit 1
           fi
 
-      - name: Publish to npm with provenance
-        if: steps.version.outputs.changed == 'true'
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Ensure version not already published
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+
+          if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+            echo "${PKG_NAME}@${PKG_VERSION} is already published" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate package tarball contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm (OIDC provenance)
+        run: npm publish --provenance
