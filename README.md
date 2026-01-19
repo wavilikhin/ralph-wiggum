@@ -1,7 +1,7 @@
 # Ralph Wiggum
 
 [![npm version](https://img.shields.io/npm/v/@wavilikhin/ralph-wiggum.svg)](https://www.npmjs.com/package/@wavilikhin/ralph-wiggum)
-[![npm publish](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml/badge.svg?event=push)](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml)
+[![npm publish](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml/badge.svg)](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml)
 
 ```
   ____       _       _       __        ___                       
