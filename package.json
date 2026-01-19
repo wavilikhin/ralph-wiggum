@@ -1,0 +1,30 @@
+{
+  "name": "ralph-wiggum",
+  "version": "0.1.0",
+  "description": "Autonomous coding loop for OpenCode - one task, one commit, fresh context per iteration",
+  "type": "module",
+  "bin": {
+    "ralph-wiggum": "./src/cli.js"
+  },
+  "files": [
+    "src/",
+    "templates/"
+  ],
+  "keywords": [
+    "opencode",
+    "ai",
+    "autonomous",
+    "coding",
+    "agent",
+    "loop"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/ralph-wiggum.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
