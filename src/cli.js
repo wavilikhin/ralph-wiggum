@@ -74,10 +74,11 @@ ${YELLOW}Available loop options:${RESET}
   --max-iterations N    Maximum iterations before stopping (default: 50)
   --model provider/m    Model to use (default: anthropic/claude-opus-4-20250514)
   --variant name        Optional variant name passed to opencode
-  --verbose             Enable verbose logging (full opencode output)
+  --verbose             Save per-iteration logs (.ralph/logs/ralph_iter_N.log)
+  --live                Stream opencode output to terminal (requires --verbose)
 
-${DIM}Logs are written to ${CYAN}.ralph/logs/ralph.log${RESET}${DIM} (iteration status)${RESET}
-${DIM}Verbose logs: ${CYAN}.ralph/logs/ralph_iter_N.log${RESET}${DIM} (full output per iteration)${RESET}
+${DIM}Logs are written to ${CYAN}.ralph/logs/ralph.log${RESET}${DIM} (iteration status + timings)${RESET}
+${DIM}Verbose logs: ${CYAN}.ralph/logs/ralph_iter_N.log${RESET}${DIM} (full output per iteration, --verbose only)${RESET}
 
 ${DIM}The loop stops automatically when all tasks are complete (<promise>COMPLETE</promise>)${RESET}
 `);

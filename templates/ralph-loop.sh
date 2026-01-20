@@ -17,6 +17,7 @@ MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-50}"
 MODEL="${RALPH_MODEL:-anthropic/claude-opus-4-20250514}"
 VARIANT=""
 VERBOSE=false
+LIVE=false
 
 # All ralph files are in .ralph/
 RALPH_DIR="$SCRIPT_DIR"
@@ -83,8 +84,11 @@ log_iteration_end() {
     local iter="$1"
     local status="$2"
     local commit_msg="$3"
-    local duration="$4"
-    log_to_file "ITER" "=== Iteration $iter FINISHED: $status (${duration}s) - $commit_msg ==="
+    local iter_duration="$4"
+    local opencode_duration="$5"
+    log_to_file "ITER" "=== Iteration $iter FINISHED: $status (iter=${iter_duration}s, opencode=${opencode_duration}s) - $commit_msg ==="
+    echo ""
+    echo -e "${DIM}Timing: opencode=${opencode_duration}s, iteration=${iter_duration}s${NC}"
 }
 
 #=============================================================================
@@ -111,7 +115,8 @@ print_usage() {
     echo "  --max-iterations N    Maximum iterations (default: $MAX_ITERATIONS)"
     echo "  --model MODEL         Model to use (default: $MODEL)"
     echo "  --variant NAME        Variant name for opencode"
-    echo "  --verbose             Enable verbose logging (full opencode output)"
+    echo "  --verbose             Save per-iteration logs (.ralph/logs/ralph_iter_N.log)"
+    echo "  --live                Stream opencode output to terminal (requires --verbose)"
     echo "  --help                Show this help"
     echo ""
     echo "Environment variables:"
@@ -119,11 +124,11 @@ print_usage() {
     echo "  RALPH_MODEL           Default model"
     echo ""
     echo "Logs:"
-    echo "  .ralph/logs/ralph.log           Iteration status (always written)"
-    echo "  .ralph/logs/ralph_iter_N.log    Full opencode output (verbose mode or on error)"
+    echo "  .ralph/logs/ralph.log           Iteration status + timings (always written)"
+    echo "  .ralph/logs/ralph_iter_N.log    Full opencode output (--verbose only)"
     echo ""
     echo "Example:"
-    echo "  $0 --max-iterations 10 --model anthropic/claude-opus-4-20250514"
+    echo "  $0 --max-iterations 10 --verbose --live"
 }
 
 check_prerequisites() {
@@ -201,6 +206,10 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --live)
+            LIVE=true
+            shift
+            ;;
         --help|-h)
             print_usage
             exit 0
@@ -223,9 +232,16 @@ log_info "Configuration:"
 echo -e "  ${DIM}Max iterations:${NC} $MAX_ITERATIONS"
 echo -e "  ${DIM}Model:${NC} $MODEL"
 echo -e "  ${DIM}Verbose:${NC} $VERBOSE"
+echo -e "  ${DIM}Live output:${NC} $LIVE"
 echo -e "  ${DIM}Repo root:${NC} $REPO_ROOT"
 [[ -n "$VARIANT" ]] && echo -e "  ${DIM}Variant:${NC} $VARIANT"
 echo ""
+
+# Validate --live requires --verbose
+if [[ "$LIVE" == true && "$VERBOSE" != true ]]; then
+    log_error "--live requires --verbose flag"
+    exit 1
+fi
 
 check_prerequisites
 
@@ -270,15 +286,29 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     log_info "Running opencode..."
     
+    OPENCODE_START=$(date +%s)
+    
     set +e
-    if [[ "$VERBOSE" == true ]]; then
-        OUTPUT=$("${OPENCODE_CMD[@]}" 2>&1 | tee "$ITER_LOG_FILE")
+    if [[ "$LIVE" == true ]]; then
+        # Stream to terminal AND write to log file
+        "${OPENCODE_CMD[@]}" 2>&1 | tee "$ITER_LOG_FILE"
+        EXIT_CODE=${PIPESTATUS[0]}
+        OUTPUT=$(cat "$ITER_LOG_FILE")
+    elif [[ "$VERBOSE" == true ]]; then
+        # Write to log file only (no terminal stream)
+        "${OPENCODE_CMD[@]}" > "$ITER_LOG_FILE" 2>&1
+        EXIT_CODE=$?
+        OUTPUT=$(cat "$ITER_LOG_FILE")
     else
+        # Capture output, write temp file for error inspection
         OUTPUT=$("${OPENCODE_CMD[@]}" 2>&1)
+        EXIT_CODE=$?
         echo "$OUTPUT" > "$ITER_LOG_FILE"
     fi
-    EXIT_CODE=$?
     set -e
+
+    OPENCODE_END=$(date +%s)
+    OPENCODE_DURATION=$((OPENCODE_END - OPENCODE_START))
 
     ITER_END=$(date +%s)
     ITER_DURATION=$((ITER_END - ITER_START))
@@ -286,7 +316,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     if [[ $EXIT_CODE -ne 0 ]]; then
         log_error "opencode exited with code $EXIT_CODE"
         log_error "Check log: $ITER_LOG_FILE"
-        log_iteration_end "$i" "FAILED" "opencode error" "$ITER_DURATION"
+        log_iteration_end "$i" "FAILED" "opencode error" "$ITER_DURATION" "$OPENCODE_DURATION"
         exit 1
     fi
 
@@ -295,7 +325,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_success "All tasks complete!"
         echo ""
         echo -e "${GREEN}${BOLD}Loop finished successfully after $i iteration(s)${NC}"
-        log_iteration_end "$i" "COMPLETE" "all tasks done" "$ITER_DURATION"
+        log_iteration_end "$i" "COMPLETE" "all tasks done" "$ITER_DURATION" "$OPENCODE_DURATION"
         log_to_file "INFO" "=== LOOP COMPLETED SUCCESSFULLY ==="
         exit 0
     fi
@@ -307,14 +337,14 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_error "No commit was created in this iteration!"
         log_error "The agent must create exactly one commit per iteration."
         log_error "Check log: $ITER_LOG_FILE"
-        log_iteration_end "$i" "FAILED" "no commit created" "$ITER_DURATION"
+        log_iteration_end "$i" "FAILED" "no commit created" "$ITER_DURATION" "$OPENCODE_DURATION"
         exit 1
     fi
 
     COMMIT_COUNT=$(git rev-list --count "$BEFORE_HEAD".."$AFTER_HEAD")
     if [[ "$COMMIT_COUNT" -ne 1 ]]; then
         log_error "Expected 1 commit, but $COMMIT_COUNT were created!"
-        log_iteration_end "$i" "FAILED" "multiple commits" "$ITER_DURATION"
+        log_iteration_end "$i" "FAILED" "multiple commits" "$ITER_DURATION" "$OPENCODE_DURATION"
         exit 1
     fi
 
@@ -322,13 +352,13 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_error "Working tree is not clean after iteration!"
         echo ""
         git status --short
-        log_iteration_end "$i" "FAILED" "dirty working tree" "$ITER_DURATION"
+        log_iteration_end "$i" "FAILED" "dirty working tree" "$ITER_DURATION" "$OPENCODE_DURATION"
         exit 1
     fi
 
     COMMIT_MSG=$(git log -1 --format='%s')
     log_success "Commit created: $COMMIT_MSG"
-    log_iteration_end "$i" "SUCCESS" "$COMMIT_MSG" "$ITER_DURATION"
+    log_iteration_end "$i" "SUCCESS" "$COMMIT_MSG" "$ITER_DURATION" "$OPENCODE_DURATION"
     
     if [[ "$VERBOSE" != true ]]; then
         rm -f "$ITER_LOG_FILE"
