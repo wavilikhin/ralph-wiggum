@@ -1,6 +1,6 @@
 {
   "name": "@wavilikhin/ralph-wiggum",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Autonomous coding loop for OpenCode - one task, one commit, fresh context per iteration",
   "type": "module",
   "bin": {
