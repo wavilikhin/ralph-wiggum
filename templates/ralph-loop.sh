@@ -18,6 +18,7 @@ MODEL="${RALPH_MODEL:-anthropic/claude-opus-4-20250514}"
 VARIANT=""
 VERBOSE=false
 LIVE=false
+OPENCODE_ARGS=()
 
 # All ralph files are in .ralph/
 RALPH_DIR="$SCRIPT_DIR"
@@ -214,10 +215,19 @@ while [[ $# -gt 0 ]]; do
             print_usage
             exit 0
             ;;
+        --)
+            shift
+            OPENCODE_ARGS+=("$@")
+            break
+            ;;
         *)
-            log_error "Unknown option: $1"
-            print_usage
-            exit 1
+            if [[ $# -ge 2 && "$2" != -* ]]; then
+                OPENCODE_ARGS+=("$1" "$2")
+                shift 2
+            else
+                OPENCODE_ARGS+=("$1")
+                shift
+            fi
             ;;
     esac
 done
@@ -265,6 +275,7 @@ cd "$REPO_ROOT"
 for i in $(seq 1 "$MAX_ITERATIONS"); do
     ITER_START=$(date +%s)
     ITER_LOG_FILE="$LOGS_DIR/ralph_iter_${i}.log"
+    LIVE_PREFIX="  ${DIM}[LIVE ${i}/${MAX_ITERATIONS}]${NC} "
     
     log_iteration_start "$i" "$MAX_ITERATIONS"
 
@@ -281,6 +292,10 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     if [[ -n "$VARIANT" ]]; then
         OPENCODE_CMD+=(--variant "$VARIANT")
     fi
+
+    if [[ ${#OPENCODE_ARGS[@]} -gt 0 ]]; then
+        OPENCODE_CMD+=("${OPENCODE_ARGS[@]}")
+    fi
     
     OPENCODE_CMD+=("Follow the attached PROMPT.md. Use AGENTS.md for validation commands and IMPLEMENTATION_PLAN.md for task selection. Do exactly one task and one commit.")
 
@@ -291,7 +306,8 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     set +e
     if [[ "$LIVE" == true ]]; then
         # Stream to terminal AND write to log file
-        "${OPENCODE_CMD[@]}" 2>&1 | tee "$ITER_LOG_FILE"
+        # Prefix each opencode line so it doesn't visually clash with ralph logs.
+        "${OPENCODE_CMD[@]}" 2>&1 | while IFS= read -r line; do printf '%b%s\n' "$LIVE_PREFIX" "$line"; done | tee "$ITER_LOG_FILE"
         EXIT_CODE=${PIPESTATUS[0]}
         OUTPUT=$(cat "$ITER_LOG_FILE")
     elif [[ "$VERBOSE" == true ]]; then

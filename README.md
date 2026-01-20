@@ -64,7 +64,9 @@ The loop stops when either:
 
 ## Flags
 
-`ralph-wiggum init` scaffolds files. The loop itself is controlled via `.ralph/run.sh`:
+`ralph-wiggum init` scaffolds files. The loop itself is controlled via `.ralph/run.sh`.
+
+Any additional flags are forwarded to `opencode run`.
 
 ```bash
 .ralph/run.sh [options]
