@@ -109,6 +109,18 @@ tail -f .ralph/logs/ralph.log
 - Enforces one commit per iteration.
 - Requires a clean working tree after each iteration.
 
+### Permissions
+
+Ralph Wiggum automatically allows `external_directory` permission to prevent OpenCode from blocking the autonomous loop with permission prompts. This setting is merged with your project's `opencode.json` — your other permissions remain intact.
+
+If you need full permissive mode (allow all permissions), set the environment variable before running:
+
+```bash
+OPENCODE_CONFIG_CONTENT='{"permission":"allow"}' .ralph/run.sh
+```
+
+See [OpenCode Permissions](https://opencode.ai/docs/permissions) for details.
+
 <details>
 <summary><strong>AI agent appendix (full detail)</strong></summary>
 

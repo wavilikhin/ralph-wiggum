@@ -282,6 +282,11 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     BEFORE_HEAD=$(git rev-parse HEAD)
     log_info "HEAD before: ${DIM}${BEFORE_HEAD:0:8}${NC}"
 
+    # Allow external_directory permission to prevent blocking prompts during autonomous execution.
+    # This merges with (not replaces) any existing opencode.json permissions in the project.
+    # See: https://opencode.ai/docs/permissions
+    export OPENCODE_CONFIG_CONTENT='{"permission":{"external_directory":"allow"}}'
+
     OPENCODE_CMD=(
         opencode run
         --model "$MODEL"
