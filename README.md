@@ -3,7 +3,18 @@
 [![npm version](https://img.shields.io/npm/v/@wavilikhin/ralph-wiggum.svg)](https://www.npmjs.com/package/@wavilikhin/ralph-wiggum)
 [![npm publish](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml/badge.svg)](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml)
 
+```
+  ____       _       _       __        ___                       
+ |  _ \ __ _| |_ __ | |__    \ \      / (_) __ _ _   _ _   _ _ __ 
+ | |_) / _` | | '_ \| '_ \    \ \ /\ / /| |/ _` | | | | | | | '_ \
+ |  _ < (_| | | |_) | | | |    \ V  V / | | (_| | |_| | |_| | | | |
+ |_| \_\__,_|_| .__/|_| |_|     \_/\_/  |_|\__, |\__,_|\__,_|_| |_|
+              |_|                          |___/                   
+```
+
 Ralph Wiggum is a tiny wrapper around the “autonomous loop” pattern: run an AI coding agent repeatedly, but keep each iteration small and strict.
+
+Origin: the [Ralph Wiggum autonomous loop](https://ghuntley.com/ralph/) pattern by Geoffrey Huntley.
 
 Each iteration:
 - starts with fresh context (new process)
