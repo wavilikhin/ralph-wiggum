@@ -18,6 +18,7 @@ MODEL="${RALPH_MODEL:-anthropic/claude-opus-4-20250514}"
 VARIANT=""
 VERBOSE=false
 LIVE=false
+STRICT=false
 OPENCODE_ARGS=()
 
 # All ralph files are in .ralph/
@@ -118,6 +119,7 @@ print_usage() {
     echo "  --variant NAME        Variant name for opencode"
     echo "  --verbose             Save per-iteration logs (.ralph/logs/ralph_iter_N.log)"
     echo "  --live                Stream opencode output to terminal (requires --verbose)"
+    echo "  --strict              Exit on any iteration anomaly (multiple commits, no commit, dirty tree)"
     echo "  --help                Show this help"
     echo ""
     echo "Environment variables:"
@@ -211,6 +213,10 @@ while [[ $# -gt 0 ]]; do
             LIVE=true
             shift
             ;;
+        --strict)
+            STRICT=true
+            shift
+            ;;
         --help|-h)
             print_usage
             exit 0
@@ -243,6 +249,7 @@ echo -e "  ${DIM}Max iterations:${NC} $MAX_ITERATIONS"
 echo -e "  ${DIM}Model:${NC} $MODEL"
 echo -e "  ${DIM}Verbose:${NC} $VERBOSE"
 echo -e "  ${DIM}Live output:${NC} $LIVE"
+echo -e "  ${DIM}Strict mode:${NC} $STRICT"
 echo -e "  ${DIM}Repo root:${NC} $REPO_ROOT"
 [[ -n "$VARIANT" ]] && echo -e "  ${DIM}Variant:${NC} $VARIANT"
 echo ""
@@ -338,7 +345,12 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_error "opencode exited with code $EXIT_CODE"
         log_error "Check log: $ITER_LOG_FILE"
         log_iteration_end "$i" "FAILED" "opencode error" "$ITER_DURATION" "$OPENCODE_DURATION"
-        exit 1
+        if [[ "$STRICT" == true ]]; then
+            exit 1
+        fi
+        log_warn "Continuing despite error (use --strict to exit on errors)"
+        echo ""
+        continue
     fi
 
     if echo "$OUTPUT" | grep -q '<promise>COMPLETE</promise>'; then
@@ -355,26 +367,42 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     log_info "HEAD after: ${DIM}${AFTER_HEAD:0:8}${NC}"
 
     if [[ "$BEFORE_HEAD" == "$AFTER_HEAD" ]]; then
-        log_error "No commit was created in this iteration!"
-        log_error "The agent must create exactly one commit per iteration."
-        log_error "Check log: $ITER_LOG_FILE"
-        log_iteration_end "$i" "FAILED" "no commit created" "$ITER_DURATION" "$OPENCODE_DURATION"
-        exit 1
+        log_warn "No commit was created in this iteration."
+        log_iteration_end "$i" "WARN" "no commit created" "$ITER_DURATION" "$OPENCODE_DURATION"
+        if [[ "$STRICT" == true ]]; then
+            log_error "Exiting due to --strict mode"
+            exit 1
+        fi
+        echo ""
+        continue
     fi
 
     COMMIT_COUNT=$(git rev-list --count "$BEFORE_HEAD".."$AFTER_HEAD")
     if [[ "$COMMIT_COUNT" -ne 1 ]]; then
-        log_error "Expected 1 commit, but $COMMIT_COUNT were created!"
-        log_iteration_end "$i" "FAILED" "multiple commits" "$ITER_DURATION" "$OPENCODE_DURATION"
-        exit 1
+        log_warn "Expected 1 commit, but $COMMIT_COUNT were created."
+        log_iteration_end "$i" "WARN" "$COMMIT_COUNT commits" "$ITER_DURATION" "$OPENCODE_DURATION"
+        if [[ "$STRICT" == true ]]; then
+            log_error "Exiting due to --strict mode"
+            exit 1
+        fi
+        # Still show the commits that were made
+        COMMIT_MSG=$(git log -1 --format='%s')
+        log_info "Latest commit: $COMMIT_MSG"
+        echo ""
+        continue
     fi
 
     if [[ -n "$(git status --porcelain)" ]]; then
-        log_error "Working tree is not clean after iteration!"
+        log_warn "Working tree is not clean after iteration."
         echo ""
         git status --short
-        log_iteration_end "$i" "FAILED" "dirty working tree" "$ITER_DURATION" "$OPENCODE_DURATION"
-        exit 1
+        log_iteration_end "$i" "WARN" "dirty working tree" "$ITER_DURATION" "$OPENCODE_DURATION"
+        if [[ "$STRICT" == true ]]; then
+            log_error "Exiting due to --strict mode"
+            exit 1
+        fi
+        echo ""
+        continue
     fi
 
     COMMIT_MSG=$(git log -1 --format='%s')
