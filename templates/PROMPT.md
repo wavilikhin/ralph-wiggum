@@ -15,6 +15,21 @@ Before doing anything:
 
 ---
 
+## [MANDATORY] Protected Files
+
+**The `.ralph/` directory is protected.** These rules are enforced:
+
+- **NEVER** delete, move, or rename any file in `.ralph/`
+- **NEVER** modify `.ralph/PROMPT.md` or `.ralph/ralph-loop.sh`
+- You may **ONLY** edit `.ralph/IMPLEMENTATION_PLAN.md` to:
+  - Mark tasks complete: `- [ ]` → `- [x]`
+  - Add discovered follow-up tasks
+  - Update notes or learnings
+
+Violating these rules will cause the loop to fail.
+
+---
+
 ## [MANDATORY] Task Selection
 
 Pick **exactly ONE** task from `IMPLEMENTATION_PLAN.md`:
