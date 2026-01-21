@@ -14,12 +14,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 #=============================================================================
 
 MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-50}"
+MAX_CONSECUTIVE_FAILURES="${RALPH_MAX_CONSECUTIVE_FAILURES:-5}"
 MODEL="${RALPH_MODEL:-anthropic/claude-opus-4-20250514}"
 VARIANT=""
 VERBOSE=false
 LIVE=false
 STRICT=false
 OPENCODE_ARGS=()
+CONSECUTIVE_FAILURES=0
 
 # All ralph files are in .ralph/
 RALPH_DIR="$SCRIPT_DIR"
@@ -286,13 +288,55 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     
     log_iteration_start "$i" "$MAX_ITERATIONS"
 
+    # Preflight: verify critical .ralph files exist before starting iteration
+    if [[ ! -f "$PROMPT_FILE" ]]; then
+        log_error "FATAL: PROMPT.md missing at $PROMPT_FILE"
+        log_error "Cannot continue without prompt file. Was it deleted?"
+        exit 1
+    fi
+    if [[ ! -f "$PLAN_FILE" ]]; then
+        log_error "FATAL: IMPLEMENTATION_PLAN.md missing at $PLAN_FILE"
+        log_error "Cannot continue without plan file. Was it deleted?"
+        exit 1
+    fi
+
     BEFORE_HEAD=$(git rev-parse HEAD)
     log_info "HEAD before: ${DIM}${BEFORE_HEAD:0:8}${NC}"
 
-    # Allow external_directory permission to prevent blocking prompts during autonomous execution.
-    # This merges with (not replaces) any existing opencode.json permissions in the project.
+    # Inject permissions to:
+    # 1. Allow external_directory to prevent blocking prompts during autonomous execution
+    # 2. Protect .ralph/ files from deletion/modification (only IMPLEMENTATION_PLAN.md is editable)
     # See: https://opencode.ai/docs/permissions
-    export OPENCODE_CONFIG_CONTENT='{"permission":{"external_directory":"allow"}}'
+    export OPENCODE_CONFIG_CONTENT='{
+      "permission": {
+        "external_directory": "allow",
+        "edit": {
+          "*": "allow",
+          ".ralph/IMPLEMENTATION_PLAN.md": "allow",
+          ".ralph/*": "deny",
+          ".ralph/**": "deny"
+        },
+        "bash": {
+          "*": "allow",
+          "rm *.ralph/*": "deny",
+          "rm *.ralph/**": "deny",
+          "rm .ralph/*": "deny",
+          "rm .ralph/**": "deny",
+          "git rm *.ralph/*": "deny",
+          "git rm *.ralph/**": "deny",
+          "git rm .ralph/*": "deny",
+          "git rm .ralph/**": "deny",
+          "mv *.ralph/*": "deny",
+          "mv *.ralph/**": "deny",
+          "mv .ralph/*": "deny",
+          "mv .ralph/**": "deny",
+          "git mv *.ralph/*": "deny",
+          "git mv *.ralph/**": "deny",
+          "git mv .ralph/*": "deny",
+          "git mv .ralph/**": "deny"
+        }
+      }
+    }'
 
     OPENCODE_CMD=(
         opencode run
@@ -341,10 +385,26 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     ITER_END=$(date +%s)
     ITER_DURATION=$((ITER_END - ITER_START))
 
+    # Postflight: verify critical .ralph files still exist after opencode ran
+    if [[ ! -f "$PLAN_FILE" ]]; then
+        log_error "FATAL: IMPLEMENTATION_PLAN.md was deleted during iteration!"
+        log_error "This should not happen. Check log: $ITER_LOG_FILE"
+        exit 1
+    fi
+
     if [[ $EXIT_CODE -ne 0 ]]; then
-        log_error "opencode exited with code $EXIT_CODE"
+        CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+        log_error "opencode exited with code $EXIT_CODE (failure $CONSECUTIVE_FAILURES/$MAX_CONSECUTIVE_FAILURES)"
         log_error "Check log: $ITER_LOG_FILE"
         log_iteration_end "$i" "FAILED" "opencode error" "$ITER_DURATION" "$OPENCODE_DURATION"
+        
+        if [[ $CONSECUTIVE_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]]; then
+            log_error "FATAL: $CONSECUTIVE_FAILURES consecutive failures reached. Stopping loop."
+            log_error "Review recent logs in $LOGS_DIR to diagnose the issue."
+            log_to_file "ERROR" "=== LOOP STOPPED: $CONSECUTIVE_FAILURES CONSECUTIVE FAILURES ==="
+            exit 1
+        fi
+        
         if [[ "$STRICT" == true ]]; then
             exit 1
         fi
@@ -352,6 +412,9 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         echo ""
         continue
     fi
+
+    # Reset consecutive failure counter on success
+    CONSECUTIVE_FAILURES=0
 
     if echo "$OUTPUT" | grep -q '<promise>COMPLETE</promise>'; then
         echo ""

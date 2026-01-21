@@ -80,8 +80,9 @@ Options:
   --help                Show help
 
 Environment variables:
-  RALPH_MAX_ITERATIONS  Default max iterations
-  RALPH_MODEL           Default model
+  RALPH_MAX_ITERATIONS           Default max iterations
+  RALPH_MAX_CONSECUTIVE_FAILURES Max consecutive failures before stopping (default: 5)
+  RALPH_MODEL                    Default model
 ```
 
 ## What gets created
@@ -108,12 +109,18 @@ tail -f .ralph/logs/ralph.log
 - Never pushes: commits are local only.
 - Enforces one commit per iteration.
 - Requires a clean working tree after each iteration.
+- **Protected `.ralph/` directory**: The agent can only edit `.ralph/IMPLEMENTATION_PLAN.md`. All other `.ralph/` files are protected from modification/deletion via OpenCode permissions.
+- **Circuit breaker**: Loop stops after 5 consecutive failures (configurable via `RALPH_MAX_CONSECUTIVE_FAILURES`).
+- **Fail-fast on missing files**: If `.ralph/PROMPT.md` or `.ralph/IMPLEMENTATION_PLAN.md` is missing, the loop exits immediately.
 
 ### Permissions
 
-Ralph Wiggum automatically allows `external_directory` permission to prevent OpenCode from blocking the autonomous loop with permission prompts. This setting is merged with your project's `opencode.json` — your other permissions remain intact.
+Ralph Wiggum injects OpenCode permissions to:
+1. Allow `external_directory` to prevent blocking prompts during autonomous execution
+2. Protect `.ralph/` files from deletion/modification (only `IMPLEMENTATION_PLAN.md` is editable)
+3. Block dangerous bash commands targeting `.ralph/` (`rm`, `mv`, `git rm`, `git mv`)
 
-If you need full permissive mode (allow all permissions), set the environment variable before running:
+These protections are always active. If you need to override them (not recommended), set `OPENCODE_CONFIG_CONTENT` manually:
 
 ```bash
 OPENCODE_CONFIG_CONTENT='{"permission":"allow"}' .ralph/run.sh
