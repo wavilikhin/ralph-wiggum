@@ -60,6 +60,8 @@ npx @wavilikhin/ralph-wiggum init
 The loop stops when either:
 - all tasks are checked off and the agent outputs `<promise>COMPLETE</promise>`
 - `--max-iterations` is reached
+- 5 consecutive failures occur (configurable via `RALPH_MAX_CONSECUTIVE_FAILURES`)
+- a critical file (`.ralph/PROMPT.md` or `.ralph/IMPLEMENTATION_PLAN.md`) is missing
 - you press Ctrl+C
 
 ## Flags
@@ -106,12 +108,41 @@ tail -f .ralph/logs/ralph.log
 
 ## Safety
 
-- Never pushes: commits are local only.
-- Enforces one commit per iteration.
-- Requires a clean working tree after each iteration.
-- **Protected `.ralph/` directory**: The agent can only edit `.ralph/IMPLEMENTATION_PLAN.md`. All other `.ralph/` files are protected from modification/deletion via OpenCode permissions.
-- **Circuit breaker**: Loop stops after 5 consecutive failures (configurable via `RALPH_MAX_CONSECUTIVE_FAILURES`).
-- **Fail-fast on missing files**: If `.ralph/PROMPT.md` or `.ralph/IMPLEMENTATION_PLAN.md` is missing, the loop exits immediately.
+Ralph Wiggum includes several safety mechanisms to keep the autonomous loop stable:
+
+### Git safety
+- **Never pushes** — all commits are local only
+- **One commit per iteration** — enforced; warns if multiple commits detected
+- **Clean working tree** — requires no uncommitted changes after each iteration
+
+### Protected `.ralph/` directory
+
+The `.ralph/` folder contains critical loop files. To prevent the agent from accidentally breaking the loop:
+
+- The agent **can only edit** `.ralph/IMPLEMENTATION_PLAN.md` (to mark tasks complete)
+- All other `.ralph/` files are **protected from modification/deletion**
+- Dangerous bash commands (`rm`, `mv`, `git rm`, `git mv`) targeting `.ralph/` are **blocked**
+
+This protection is enforced via [OpenCode permissions](https://opencode.ai/docs/permissions) injected at runtime.
+
+### Circuit breaker (error loop prevention)
+
+If `opencode` fails repeatedly, the loop stops automatically:
+
+- **Default**: exits after **5 consecutive failures**
+- **Configurable**: set `RALPH_MAX_CONSECUTIVE_FAILURES` environment variable
+- **Resets on success**: any successful iteration resets the counter
+
+This prevents runaway loops (e.g., agent stuck on an unfixable error burning through iterations).
+
+### Fail-fast on missing files
+
+Before each iteration, the loop verifies that critical files exist:
+
+- `.ralph/PROMPT.md`
+- `.ralph/IMPLEMENTATION_PLAN.md`
+
+If either is missing, the loop **exits immediately** with a clear error message. This catches accidental deletions before they cause cascading failures.
 
 ### Permissions
 
