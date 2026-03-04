@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ralph Wiggum Loop - Autonomous coding loop for OpenCode
+# Ralph Wiggum Loop - Autonomous coding loop
 # Each iteration: fresh context, one task, one commit
 
 # Get the directory where this script is located
@@ -15,12 +15,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-50}"
 MAX_CONSECUTIVE_FAILURES="${RALPH_MAX_CONSECUTIVE_FAILURES:-5}"
-MODEL="${RALPH_MODEL:-anthropic/claude-opus-4-20250514}"
-VARIANT=""
+AGENT_CMD=""
 VERBOSE=false
 LIVE=false
 STRICT=false
-OPENCODE_ARGS=()
 CONSECUTIVE_FAILURES=0
 
 # All ralph files are in .ralph/
@@ -89,10 +87,10 @@ log_iteration_end() {
     local status="$2"
     local commit_msg="$3"
     local iter_duration="$4"
-    local opencode_duration="$5"
-    log_to_file "ITER" "=== Iteration $iter FINISHED: $status (iter=${iter_duration}s, opencode=${opencode_duration}s) - $commit_msg ==="
+    local agent_duration="$5"
+    log_to_file "ITER" "=== Iteration $iter FINISHED: $status (iter=${iter_duration}s, agent=${agent_duration}s) - $commit_msg ==="
     echo ""
-    echo -e "${DIM}Timing: opencode=${opencode_duration}s, iteration=${iter_duration}s${NC}"
+    echo -e "${DIM}Timing: agent=${agent_duration}s, iteration=${iter_duration}s${NC}"
 }
 
 #=============================================================================
@@ -108,7 +106,7 @@ print_banner() {
     echo ' |_| \_\__,_|_| .__/|_| |_|     \_/\_/  |_|\__, |\__,_|\__,_|_| |_|'
     echo '              |_|                          |___/                   '
     echo -e "${NC}"
-    echo -e "${DIM}  Autonomous coding loop for OpenCode${NC}"
+    echo -e "${DIM}  Autonomous coding loop${NC}"
     echo ""
 }
 
@@ -116,30 +114,38 @@ print_usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
+    echo "  --agent-cmd CMD       Command to run each iteration (required)"
     echo "  --max-iterations N    Maximum iterations (default: $MAX_ITERATIONS)"
-    echo "  --model MODEL         Model to use (default: $MODEL)"
-    echo "  --variant NAME        Variant name for opencode"
     echo "  --verbose             Save per-iteration logs (.ralph/logs/ralph_iter_N.log)"
-    echo "  --live                Stream opencode output to terminal (requires --verbose)"
-    echo "  --strict              Exit on any iteration anomaly (multiple commits, no commit, dirty tree)"
+    echo "  --live                Stream agent output to terminal (requires --verbose)"
+    echo "  --strict              Exit on any iteration anomaly"
     echo "  --help                Show this help"
     echo ""
     echo "Environment variables:"
     echo "  RALPH_MAX_ITERATIONS  Default max iterations"
-    echo "  RALPH_MODEL           Default model"
+    echo ""
+    echo "Example:"
+    echo "  $0 --agent-cmd 'opencode run --model anthropic/claude-opus-4-20250514'"
+    echo "  $0 --agent-cmd 'codex run --model anthropic/claude-opus-4-20250514'"
     echo ""
     echo "Logs:"
     echo "  .ralph/logs/ralph.log           Iteration status + timings (always written)"
-    echo "  .ralph/logs/ralph_iter_N.log    Full opencode output (--verbose only)"
+    echo "  .ralph/logs/ralph_iter_N.log    Full agent output (--verbose only)"
     echo ""
-    echo "Example:"
-    echo "  $0 --max-iterations 10 --verbose --live"
 }
 
 check_prerequisites() {
-    if ! command -v opencode &> /dev/null; then
-        log_error "opencode CLI not found. Install it first:"
-        echo "  npm install -g opencode"
+    if [[ -z "$AGENT_CMD" ]]; then
+        log_error "--agent-cmd is required. Example:"
+        echo "  $0 --agent-cmd 'opencode run --model anthropic/claude-opus-4-20250514'"
+        exit 1
+    fi
+
+    # Extract first word as the agent binary and check it exists
+    local agent_bin
+    agent_bin=$(echo "$AGENT_CMD" | awk '{print $1}')
+    if ! command -v "$agent_bin" &> /dev/null; then
+        log_error "Agent command '$agent_bin' not found in PATH"
         exit 1
     fi
 
@@ -195,16 +201,12 @@ check_prerequisites() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --agent-cmd)
+            AGENT_CMD="$2"
+            shift 2
+            ;;
         --max-iterations)
             MAX_ITERATIONS="$2"
-            shift 2
-            ;;
-        --model)
-            MODEL="$2"
-            shift 2
-            ;;
-        --variant)
-            VARIANT="$2"
             shift 2
             ;;
         --verbose)
@@ -223,19 +225,10 @@ while [[ $# -gt 0 ]]; do
             print_usage
             exit 0
             ;;
-        --)
-            shift
-            OPENCODE_ARGS+=("$@")
-            break
-            ;;
         *)
-            if [[ $# -ge 2 && "$2" != -* ]]; then
-                OPENCODE_ARGS+=("$1" "$2")
-                shift 2
-            else
-                OPENCODE_ARGS+=("$1")
-                shift
-            fi
+            echo "Unknown option: $1"
+            print_usage
+            exit 1
             ;;
     esac
 done
@@ -247,13 +240,12 @@ done
 print_banner
 
 log_info "Configuration:"
+echo -e "  ${DIM}Agent command:${NC} $AGENT_CMD"
 echo -e "  ${DIM}Max iterations:${NC} $MAX_ITERATIONS"
-echo -e "  ${DIM}Model:${NC} $MODEL"
 echo -e "  ${DIM}Verbose:${NC} $VERBOSE"
 echo -e "  ${DIM}Live output:${NC} $LIVE"
 echo -e "  ${DIM}Strict mode:${NC} $STRICT"
 echo -e "  ${DIM}Repo root:${NC} $REPO_ROOT"
-[[ -n "$VARIANT" ]] && echo -e "  ${DIM}Variant:${NC} $VARIANT"
 echo ""
 
 # Validate --live requires --verbose
@@ -269,7 +261,7 @@ mkdir -p "$LOGS_DIR"
 # Initialize log file
 echo "========================================" >> "$LOG_FILE"
 echo "Ralph Wiggum Loop Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
-echo "Model: $MODEL" >> "$LOG_FILE"
+echo "Agent Command: $AGENT_CMD" >> "$LOG_FILE"
 echo "Max Iterations: $MAX_ITERATIONS" >> "$LOG_FILE"
 echo "Repo: $REPO_ROOT" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
@@ -303,89 +295,49 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     BEFORE_HEAD=$(git rev-parse HEAD)
     log_info "HEAD before: ${DIM}${BEFORE_HEAD:0:8}${NC}"
 
-    # Inject permissions to:
-    # 1. Allow external_directory to prevent blocking prompts during autonomous execution
-    # 2. Protect .ralph/ files from deletion/modification (only IMPLEMENTATION_PLAN.md is editable)
-    # See: https://opencode.ai/docs/permissions
-    export OPENCODE_CONFIG_CONTENT='{
-      "permission": {
-        "external_directory": "allow",
-        "edit": {
-          "*": "allow",
-          ".ralph/IMPLEMENTATION_PLAN.md": "allow",
-          ".ralph/*": "deny",
-          ".ralph/**": "deny"
-        },
-        "bash": {
-          "*": "allow",
-          "rm *.ralph/*": "deny",
-          "rm *.ralph/**": "deny",
-          "rm .ralph/*": "deny",
-          "rm .ralph/**": "deny",
-          "git rm *.ralph/*": "deny",
-          "git rm *.ralph/**": "deny",
-          "git rm .ralph/*": "deny",
-          "git rm .ralph/**": "deny",
-          "mv *.ralph/*": "deny",
-          "mv *.ralph/**": "deny",
-          "mv .ralph/*": "deny",
-          "mv .ralph/**": "deny",
-          "git mv *.ralph/*": "deny",
-          "git mv *.ralph/**": "deny",
-          "git mv .ralph/*": "deny",
-          "git mv .ralph/**": "deny"
-        }
-      }
-    }'
-
-    OPENCODE_CMD=(
-        opencode run
-        --model "$MODEL"
-        --file "$PROMPT_FILE"
-        --file "$PLAN_FILE"
-    )
+    # Build the agent command from user-provided AGENT_CMD
+    # Add the prompt files as arguments if the agent supports --file flag
+    # Note: File paths with spaces are handled via printf %q escaping
+    local instruction="Follow the attached PROMPT.md. Use AGENTS.md for validation commands and IMPLEMENTATION_PLAN.md for task selection. Do exactly one task and one commit."
     
-    if [[ -n "$VARIANT" ]]; then
-        OPENCODE_CMD+=(--variant "$VARIANT")
-    fi
+    # Build command using printf %q to properly escape arguments
+    local full_cmd
+    full_cmd="$AGENT_CMD"
+    full_cmd="$full_cmd --file $(printf '%q' "$PROMPT_FILE")"
+    full_cmd="$full_cmd --file $(printf '%q' "$PLAN_FILE")"
+    full_cmd="$full_cmd -- $(printf '%q' "$instruction")"
 
-    if [[ ${#OPENCODE_ARGS[@]} -gt 0 ]]; then
-        OPENCODE_CMD+=("${OPENCODE_ARGS[@]}")
-    fi
+    log_info "Running agent..."
     
-    OPENCODE_CMD+=("Follow the attached PROMPT.md. Use AGENTS.md for validation commands and IMPLEMENTATION_PLAN.md for task selection. Do exactly one task and one commit.")
-
-    log_info "Running opencode..."
-    
-    OPENCODE_START=$(date +%s)
+    AGENT_START=$(date +%s)
     
     set +e
     if [[ "$LIVE" == true ]]; then
         # Stream to terminal AND write to log file
-        # Prefix each opencode line so it doesn't visually clash with ralph logs.
-        "${OPENCODE_CMD[@]}" 2>&1 | while IFS= read -r line; do printf '%b%s\n' "$LIVE_PREFIX" "$line"; done | tee "$ITER_LOG_FILE"
+        # Prefix each agent line so it doesn't visually clash with ralph logs.
+        eval "$full_cmd" 2>&1 | while IFS= read -r line; do printf '%b%s\n' "$LIVE_PREFIX" "$line"; done | tee "$ITER_LOG_FILE"
         EXIT_CODE=${PIPESTATUS[0]}
         OUTPUT=$(cat "$ITER_LOG_FILE")
     elif [[ "$VERBOSE" == true ]]; then
         # Write to log file only (no terminal stream)
-        "${OPENCODE_CMD[@]}" > "$ITER_LOG_FILE" 2>&1
+        eval "$full_cmd" > "$ITER_LOG_FILE" 2>&1
         EXIT_CODE=$?
         OUTPUT=$(cat "$ITER_LOG_FILE")
     else
         # Capture output, write temp file for error inspection
-        OUTPUT=$("${OPENCODE_CMD[@]}" 2>&1)
+        OUTPUT=$(eval "$full_cmd" 2>&1)
         EXIT_CODE=$?
         echo "$OUTPUT" > "$ITER_LOG_FILE"
     fi
     set -e
 
-    OPENCODE_END=$(date +%s)
-    OPENCODE_DURATION=$((OPENCODE_END - OPENCODE_START))
+    AGENT_END=$(date +%s)
+    AGENT_DURATION=$((AGENT_END - AGENT_START))
 
     ITER_END=$(date +%s)
     ITER_DURATION=$((ITER_END - ITER_START))
 
-    # Postflight: verify critical .ralph files still exist after opencode ran
+    # Postflight: verify critical .ralph files still exist after agent ran
     if [[ ! -f "$PLAN_FILE" ]]; then
         log_error "FATAL: IMPLEMENTATION_PLAN.md was deleted during iteration!"
         log_error "This should not happen. Check log: $ITER_LOG_FILE"
@@ -394,9 +346,9 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     if [[ $EXIT_CODE -ne 0 ]]; then
         CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
-        log_error "opencode exited with code $EXIT_CODE (failure $CONSECUTIVE_FAILURES/$MAX_CONSECUTIVE_FAILURES)"
+        log_error "agent exited with code $EXIT_CODE (failure $CONSECUTIVE_FAILURES/$MAX_CONSECUTIVE_FAILURES)"
         log_error "Check log: $ITER_LOG_FILE"
-        log_iteration_end "$i" "FAILED" "opencode error" "$ITER_DURATION" "$OPENCODE_DURATION"
+        log_iteration_end "$i" "FAILED" "agent error" "$ITER_DURATION" "$AGENT_DURATION"
         
         if [[ $CONSECUTIVE_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]]; then
             log_error "FATAL: $CONSECUTIVE_FAILURES consecutive failures reached. Stopping loop."
@@ -421,7 +373,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_success "All tasks complete!"
         echo ""
         echo -e "${GREEN}${BOLD}Loop finished successfully after $i iteration(s)${NC}"
-        log_iteration_end "$i" "COMPLETE" "all tasks done" "$ITER_DURATION" "$OPENCODE_DURATION"
+        log_iteration_end "$i" "COMPLETE" "all tasks done" "$ITER_DURATION" "$AGENT_DURATION"
         log_to_file "INFO" "=== LOOP COMPLETED SUCCESSFULLY ==="
         exit 0
     fi
@@ -431,7 +383,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     if [[ "$BEFORE_HEAD" == "$AFTER_HEAD" ]]; then
         log_warn "No commit was created in this iteration."
-        log_iteration_end "$i" "WARN" "no commit created" "$ITER_DURATION" "$OPENCODE_DURATION"
+        log_iteration_end "$i" "WARN" "no commit created" "$ITER_DURATION" "$AGENT_DURATION"
         if [[ "$STRICT" == true ]]; then
             log_error "Exiting due to --strict mode"
             exit 1
@@ -443,7 +395,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     COMMIT_COUNT=$(git rev-list --count "$BEFORE_HEAD".."$AFTER_HEAD")
     if [[ "$COMMIT_COUNT" -ne 1 ]]; then
         log_warn "Expected 1 commit, but $COMMIT_COUNT were created."
-        log_iteration_end "$i" "WARN" "$COMMIT_COUNT commits" "$ITER_DURATION" "$OPENCODE_DURATION"
+        log_iteration_end "$i" "WARN" "$COMMIT_COUNT commits" "$ITER_DURATION" "$AGENT_DURATION"
         if [[ "$STRICT" == true ]]; then
             log_error "Exiting due to --strict mode"
             exit 1
@@ -459,7 +411,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_warn "Working tree is not clean after iteration."
         echo ""
         git status --short
-        log_iteration_end "$i" "WARN" "dirty working tree" "$ITER_DURATION" "$OPENCODE_DURATION"
+        log_iteration_end "$i" "WARN" "dirty working tree" "$ITER_DURATION" "$AGENT_DURATION"
         if [[ "$STRICT" == true ]]; then
             log_error "Exiting due to --strict mode"
             exit 1
@@ -470,7 +422,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     COMMIT_MSG=$(git log -1 --format='%s')
     log_success "Commit created: $COMMIT_MSG"
-    log_iteration_end "$i" "SUCCESS" "$COMMIT_MSG" "$ITER_DURATION" "$OPENCODE_DURATION"
+    log_iteration_end "$i" "SUCCESS" "$COMMIT_MSG" "$ITER_DURATION" "$AGENT_DURATION"
     
     if [[ "$VERBOSE" != true ]]; then
         rm -f "$ITER_LOG_FILE"

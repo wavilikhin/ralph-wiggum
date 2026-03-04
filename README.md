@@ -54,7 +54,7 @@ npx @wavilikhin/ralph-wiggum init
 4) Run the loop:
 
 ```bash
-.ralph/run.sh --max-iterations 20 --model anthropic/claude-opus-4-20250514
+.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"
 ```
 
 The loop stops when either:
@@ -68,23 +68,20 @@ The loop stops when either:
 
 `ralph-wiggum init` scaffolds files. The loop itself is controlled via `.ralph/run.sh`.
 
-Any additional flags are forwarded to `opencode run`.
+Any additional flags should be included in the `--agent-cmd` argument.
 
 ```bash
 .ralph/run.sh [options]
 
 Options:
+  --agent-cmd CMD       Command to run each iteration (required)
   --max-iterations N    Maximum iterations before stopping (default: 50)
-  --model MODEL         Model to use (default: anthropic/claude-opus-4-20250514)
-  --variant NAME        Optional variant name passed to opencode
   --verbose             Keep per-iteration logs (.ralph/logs/ralph_iter_N.log)
-  --live                Stream opencode output (requires --verbose)
+  --live                Stream agent output (requires --verbose)
   --help                Show help
 
 Environment variables:
   RALPH_MAX_ITERATIONS           Default max iterations
-  RALPH_MAX_CONSECUTIVE_FAILURES Max consecutive failures before stopping (default: 5)
-  RALPH_MODEL                    Default model
 ```
 
 ## What gets created
@@ -117,17 +114,16 @@ Ralph Wiggum includes several safety mechanisms to keep the autonomous loop stab
 
 ### Protected `.ralph/` directory
 
-The `.ralph/` folder contains critical loop files. To prevent the agent from accidentally breaking the loop:
+The `.ralph/` folder contains critical loop files. The protection rules are documented in `PROMPT.md` which the agent reads each iteration:
 
 - The agent **can only edit** `.ralph/IMPLEMENTATION_PLAN.md` (to mark tasks complete)
 - All other `.ralph/` files are **protected from modification/deletion**
-- Dangerous bash commands (`rm`, `mv`, `git rm`, `git mv`) targeting `.ralph/` are **blocked**
 
-This protection is enforced via [OpenCode permissions](https://opencode.ai/docs/permissions) injected at runtime.
+Note: The actual enforcement depends on the agent being used. Consult your agent's documentation for permission settings.
 
 ### Circuit breaker (error loop prevention)
 
-If `opencode` fails repeatedly, the loop stops automatically:
+If the agent fails repeatedly, the loop stops automatically:
 
 - **Default**: exits after **5 consecutive failures**
 - **Configurable**: set `RALPH_MAX_CONSECUTIVE_FAILURES` environment variable
@@ -144,31 +140,9 @@ Before each iteration, the loop verifies that critical files exist:
 
 If either is missing, the loop **exits immediately** with a clear error message. This catches accidental deletions before they cause cascading failures.
 
-### Permissions
+### Fail-fast on missing files
 
-Ralph Wiggum injects OpenCode permissions to:
-1. Allow `external_directory` to prevent blocking prompts during autonomous execution
-2. Protect `.ralph/` files from deletion/modification (only `IMPLEMENTATION_PLAN.md` is editable)
-3. Block dangerous bash commands targeting `.ralph/` (`rm`, `mv`, `git rm`, `git mv`)
-
-These protections are always active. If you need to override them (not recommended), set `OPENCODE_CONFIG_CONTENT` manually:
-
-```bash
-OPENCODE_CONFIG_CONTENT='{"permission":"allow"}' .ralph/run.sh
-```
-
-See [OpenCode Permissions](https://opencode.ai/docs/permissions) for details.
-
-<details>
-<summary><strong>AI agent appendix (full detail)</strong></summary>
-
-### Model requirements
-
-This loop is strict and works best with high-end models that can follow multistep instructions reliably:
-- `anthropic/claude-opus-4-20250514`
-- `openai/gpt-5.2`
-
-### `AGENTS.md` (repo root) is required
+Before each iteration, the loop verifies that critical files exist:
 
 Ralph Wiggum expects a repo-root `AGENTS.md` that tells the agent how to validate changes.
 

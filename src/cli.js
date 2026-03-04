@@ -65,17 +65,16 @@ ${BOLD}2.${RESET} (Optional) Customize the prompt:
    ${DIM}Edit ${CYAN}.ralph/PROMPT.md${RESET}${DIM} - mandatory sections are marked, customize the rest${RESET}
 
 ${BOLD}3.${RESET} Run the loop:
-   ${CYAN}.ralph/run.sh --max-iterations 10 --model anthropic/claude-opus-4-20250514${RESET}
+   ${CYAN}.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"${RESET}
 
 ${YELLOW}${BOLD}Important:${RESET} This tool works best with the latest generation models.
 ${DIM}Recommended: anthropic/claude-opus-4-20250514 or openai/gpt-5.2${RESET}
 
 ${YELLOW}Available loop options:${RESET}
+  --agent-cmd CMD       Command to run each iteration (required)
   --max-iterations N    Maximum iterations before stopping (default: 50)
-  --model provider/m    Model to use (default: anthropic/claude-opus-4-20250514)
-  --variant name        Optional variant name passed to opencode
   --verbose             Save per-iteration logs (.ralph/logs/ralph_iter_N.log)
-  --live                Stream opencode output to terminal (requires --verbose)
+  --live                Stream agent output to terminal (requires --verbose)
 
 ${DIM}Logs are written to ${CYAN}.ralph/logs/ralph.log${RESET}${DIM} (iteration status + timings)${RESET}
 ${DIM}Verbose logs: ${CYAN}.ralph/logs/ralph_iter_N.log${RESET}${DIM} (full output per iteration, --verbose only)${RESET}
