@@ -1,187 +1,119 @@
 # Ralph Wiggum
 
-[![npm version](https://img.shields.io/npm/v/@wavilikhin/ralph-wiggum.svg)](https://www.npmjs.com/package/@wavilikhin/ralph-wiggum)
-[![npm publish](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml/badge.svg)](https://github.com/wavilikhin/ralph-wiggum/actions/workflows/publish.yml)
+A tiny autonomous coding loop:
 
-```
-  ____       _       _       __        ___                       
- |  _ \ __ _| |_ __ | |__    \ \      / (_) __ _ _   _ _   _ _ __ 
- | |_) / _` | | '_ \| '_ \    \ \ /\ / /| |/ _` | | | | | | | '_ \
- |  _ < (_| | | |_) | | | |    \ V  V / | | (_| | |_| | |_| | | | |
- |_| \_\__,_|_| .__/|_| |_|     \_/\_/  |_|\__, |\__,_|\__,_|_| |_|
-              |_|                          |___/                   
-```
+- picks one task from a plan
+- runs your AI agent with fresh context
+- expects exactly one commit per iteration
+- repeats until tasks are done or max iterations reached
 
-Ralph Wiggum is a tiny wrapper around the “autonomous loop” pattern: run an AI coding agent repeatedly, but keep each iteration small and strict.
+Package: `@wavilikhin/ralph-wiggum`
 
-Origin: the [Ralph Wiggum autonomous loop](https://ghuntley.com/ralph/) pattern by Geoffrey Huntley.
-
-Each iteration:
-- starts with fresh context (new process)
-- completes exactly one plan item
-- runs your repo’s validation commands
-- creates exactly one local git commit
-
-This keeps context focused and your history clean.
+---
 
 ## Install
 
-No global install needed:
+```bash
+npm i -D @wavilikhin/ralph-wiggum
+```
+
+Or run without installing:
 
 ```bash
 npx @wavilikhin/ralph-wiggum init
 ```
 
-(Inside an existing git repo.)
+---
 
 ## Quick start
 
-1) Ensure you have prerequisites:
-- Node.js 18+
-- `opencode` installed and configured (or another CLI agent)
-- a repo-root `AGENTS.md` that lists your validation commands
+From repo root:
 
-2) Scaffold `.ralph/`:
+**1. Initialize Ralph files:**
 
 ```bash
 npx @wavilikhin/ralph-wiggum init
 ```
 
-3) Fill in tasks:
-- Edit `.ralph/IMPLEMENTATION_PLAN.md`
-- Use checkboxes (`- [ ]`, `- [x]`)
+**2. Edit your plan:**
 
-4) Run the loop:
+```bash
+.ralph/IMPLEMENTATION_PLAN.md
+```
+
+**3. (Optional) Customize the prompt:**
+
+```bash
+.ralph/PROMPT.md
+```
+
+**4. (Optional) Add AGENTS.md to help your AI agent:**
+
+Create an `AGENTS.md` in your repo root with validation commands (lint, test, build). Some agents read this to know how to validate changes.
+
+**5. Run the loop:**
 
 ```bash
 .ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"
 ```
 
-The loop stops when either:
-- all tasks are checked off and the agent outputs `<promise>COMPLETE</promise>`
-- `--max-iterations` is reached
-- 5 consecutive failures occur (configurable via `RALPH_MAX_CONSECUTIVE_FAILURES`)
-- a critical file (`.ralph/PROMPT.md` or `.ralph/IMPLEMENTATION_PLAN.md`) is missing
-- you press Ctrl+C
+---
 
-## Flags
-
-`ralph-wiggum init` scaffolds files. The loop itself is controlled via `.ralph/run.sh`.
-
-Any additional flags should be included in the `--agent-cmd` argument.
+## Loop options
 
 ```bash
 .ralph/run.sh [options]
 
 Options:
   --agent-cmd CMD       Command to run each iteration (required)
-  --max-iterations N    Maximum iterations before stopping (default: 50)
-  --verbose             Keep per-iteration logs (.ralph/logs/ralph_iter_N.log)
+  --max-iterations N    Maximum iterations (default: 50)
+  --verbose             Save per-iteration logs
   --live                Stream agent output (requires --verbose)
+  --strict              Exit on any iteration anomaly
   --help                Show help
+```
 
 Environment variables:
-  RALPH_MAX_ITERATIONS           Default max iterations
-```
+
+- `RALPH_MAX_ITERATIONS` — default max iterations
+- `RALPH_MAX_CONSECUTIVE_FAILURES` — stop after N failures (default: 5)
+
+---
 
 ## What gets created
 
-`init` creates a `.ralph/` directory:
-- `.ralph/PROMPT.md` – instructions the agent reads every iteration
-- `.ralph/IMPLEMENTATION_PLAN.md` – your checklist of tasks
-- `.ralph/run.sh` – the loop runner
-- `.ralph/logs/` – log directory (ignored via `.gitignore`)
+`ralph-wiggum init` creates:
 
-## Logs
+```text
+.ralph/
+  run.sh
+  PROMPT.md
+  IMPLEMENTATION_PLAN.md
+  logs/.gitkeep
+```
 
-- `.ralph/logs/ralph.log` is always written (timestamps + iteration status).
-- `.ralph/logs/ralph_iter_N.log` is kept only with `--verbose` (or on failures).
+And updates `.gitignore` to ignore `.ralph/logs/`.
 
-Watch progress:
+---
+
+## Agent compatibility
+
+Ralph works with any CLI agent that runs non-interactively. Examples:
 
 ```bash
-tail -f .ralph/logs/ralph.log
+# OpenCode
+.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"
+
+# Codex
+.ralph/run.sh --agent-cmd "codex run --model anthropic/claude-opus-4-20250514"
+
+# Claude Code
+.ralph/run.sh --agent-cmd "claude --print"
 ```
 
-## Safety
+Some agents (like OpenCode) look for an `AGENTS.md` file with validation commands. This helps them run lint/test/build checks automatically. Create one if your agent supports it.
 
-Ralph Wiggum includes several safety mechanisms to keep the autonomous loop stable:
-
-### Git safety
-- **Never pushes** — all commits are local only
-- **One commit per iteration** — enforced; warns if multiple commits detected
-- **Clean working tree** — requires no uncommitted changes after each iteration
-
-### Protected `.ralph/` directory
-
-The `.ralph/` folder contains critical loop files. The protection rules are documented in `PROMPT.md` which the agent reads each iteration:
-
-- The agent **can only edit** `.ralph/IMPLEMENTATION_PLAN.md` (to mark tasks complete)
-- All other `.ralph/` files are **protected from modification/deletion**
-
-Note: The actual enforcement depends on the agent being used. Consult your agent's documentation for permission settings.
-
-### Circuit breaker (error loop prevention)
-
-If the agent fails repeatedly, the loop stops automatically:
-
-- **Default**: exits after **5 consecutive failures**
-- **Configurable**: set `RALPH_MAX_CONSECUTIVE_FAILURES` environment variable
-- **Resets on success**: any successful iteration resets the counter
-
-This prevents runaway loops (e.g., agent stuck on an unfixable error burning through iterations).
-
-### Fail-fast on missing files
-
-Before each iteration, the loop verifies that critical files exist:
-
-- `.ralph/PROMPT.md`
-- `.ralph/IMPLEMENTATION_PLAN.md`
-
-If either is missing, the loop **exits immediately** with a clear error message. This catches accidental deletions before they cause cascading failures.
-
-### Fail-fast on missing files
-
-Before each iteration, the loop verifies that critical files exist:
-
-Ralph Wiggum expects a repo-root `AGENTS.md` that tells the agent how to validate changes.
-
-At minimum, include:
-- formatting command
-- lint command
-- typecheck command (if applicable)
-- test command
-
-Example (minimal):
-
-```markdown
-## Validation Commands
-1. Format: `npm run format`
-2. Lint: `npm run lint`
-3. Typecheck: `npm run typecheck`
-4. Test: `npm test`
-```
-
-OpenCode docs: https://opencode.ai/docs/agents-md
-
-### What happens each iteration
-
-- A fresh `opencode run` process starts (no memory).
-- The agent reads (at least) `.ralph/PROMPT.md`, `.ralph/IMPLEMENTATION_PLAN.md`, and `AGENTS.md`.
-- The agent must pick exactly one unchecked task, implement it, run all validation gates, update the plan, and make exactly one commit.
-- When every task is complete, the agent must output exactly `<promise>COMPLETE</promise>`.
-
-### Templates
-
-Scaffolded from:
-- `templates/PROMPT.md`
-- `templates/IMPLEMENTATION_PLAN.md`
-
-</details>
-
-## Credits
-
-Based on the [Ralph Wiggum pattern](https://ghuntley.com/ralph/) by Geoffrey Huntley.
+---
 
 ## License
 

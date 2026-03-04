@@ -162,19 +162,18 @@ check_prerequisites() {
     fi
 
     if [[ ! -f "$REPO_ROOT/AGENTS.md" ]]; then
-        log_error "AGENTS.md not found in repo root."
+        log_warn "AGENTS.md not found in repo root."
         echo ""
-        echo "Ralph Wiggum requires an AGENTS.md file with your validation commands."
-        echo "This file tells the agent how to lint, test, and build your project."
-        echo ""
-        echo "Create AGENTS.md with at minimum:"
-        echo "  - Formatting command"
-        echo "  - Linting command"
-        echo "  - Type checking command (if applicable)"
-        echo "  - Test command"
+        echo "Some agents (like OpenCode) read AGENTS.md for validation commands."
+        echo "Consider creating one if your agent supports it."
         echo ""
         echo "See: https://opencode.ai/docs/agents-md"
-        exit 1
+        echo ""
+        read -p "Continue without AGENTS.md? [Y/n] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            exit 1
+        fi
     fi
 
     if ! git -C "$REPO_ROOT" rev-parse --git-dir > /dev/null 2>&1; then

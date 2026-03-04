@@ -48,9 +48,8 @@ ${YELLOW}${BOLD}Next steps:${RESET}
 `);
 
   if (!hasAgentsMd) {
-    console.log(`${RED}${BOLD}[REQUIRED]${RESET} Create AGENTS.md in your repo root:
-   ${DIM}This file must contain your validation commands (lint, test, build).${RESET}
-   ${DIM}The agent reads this file to know how to validate changes.${RESET}
+    console.log(`${YELLOW}[OPTIONAL]${RESET} Create AGENTS.md in your repo root:
+   ${DIM}Some agents (like OpenCode) use this for validation commands.${RESET}
    ${DIM}See: https://opencode.ai/docs/agents-md${RESET}
 `);
   } else {
