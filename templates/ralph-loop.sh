@@ -126,7 +126,8 @@ print_usage() {
     echo ""
     echo "Example:"
     echo "  $0 --agent-cmd 'opencode run --model anthropic/claude-opus-4-20250514'"
-    echo "  $0 --agent-cmd 'codex run --model anthropic/claude-opus-4-20250514'"
+    echo "  $0 --agent-cmd 'codex exec --model openai/gpt-5.2 -C .'"
+    echo "  $0 --agent-cmd 'pi -p --model openai/gpt-5.2'"
     echo ""
     echo "Logs:"
     echo "  .ralph/logs/ralph.log           Iteration status + timings (always written)"
@@ -169,11 +170,6 @@ check_prerequisites() {
         echo ""
         echo "See: https://opencode.ai/docs/agents-md"
         echo ""
-        read -p "Continue without AGENTS.md? [Y/n] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Nn]$ ]]; then
-            exit 1
-        fi
     fi
 
     if ! git -C "$REPO_ROOT" rev-parse --git-dir > /dev/null 2>&1; then
@@ -186,9 +182,8 @@ check_prerequisites() {
         echo ""
         git -C "$REPO_ROOT" status --short
         echo ""
-        read -p "Continue anyway? [y/N] " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        if [[ "$STRICT" == true ]]; then
+            log_error "Exiting due to --strict mode"
             exit 1
         fi
     fi
@@ -238,6 +233,16 @@ done
 
 print_banner
 
+mkdir -p "$LOGS_DIR"
+
+# Initialize log file
+echo "========================================" >> "$LOG_FILE"
+echo "Ralph Wiggum Loop Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
+echo "Agent Command: $AGENT_CMD" >> "$LOG_FILE"
+echo "Max Iterations: $MAX_ITERATIONS" >> "$LOG_FILE"
+echo "Repo: $REPO_ROOT" >> "$LOG_FILE"
+echo "========================================" >> "$LOG_FILE"
+
 log_info "Configuration:"
 echo -e "  ${DIM}Agent command:${NC} $AGENT_CMD"
 echo -e "  ${DIM}Max iterations:${NC} $MAX_ITERATIONS"
@@ -254,16 +259,6 @@ if [[ "$LIVE" == true && "$VERBOSE" != true ]]; then
 fi
 
 check_prerequisites
-
-mkdir -p "$LOGS_DIR"
-
-# Initialize log file
-echo "========================================" >> "$LOG_FILE"
-echo "Ralph Wiggum Loop Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
-echo "Agent Command: $AGENT_CMD" >> "$LOG_FILE"
-echo "Max Iterations: $MAX_ITERATIONS" >> "$LOG_FILE"
-echo "Repo: $REPO_ROOT" >> "$LOG_FILE"
-echo "========================================" >> "$LOG_FILE"
 
 log_info "Starting autonomous loop..."
 log_info "Status log: $LOG_FILE"
@@ -294,17 +289,10 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     BEFORE_HEAD=$(git rev-parse HEAD)
     log_info "HEAD before: ${DIM}${BEFORE_HEAD:0:8}${NC}"
 
-    # Build the agent command from user-provided AGENT_CMD
-    # Add the prompt files as arguments if the agent supports --file flag
-    # Note: File paths with spaces are handled via printf %q escaping
-    local instruction="Follow the attached PROMPT.md. Use AGENTS.md for validation commands and IMPLEMENTATION_PLAN.md for task selection. Do exactly one task and one commit."
-    
-    # Build command using printf %q to properly escape arguments
-    local full_cmd
-    full_cmd="$AGENT_CMD"
-    full_cmd="$full_cmd --file $(printf '%q' "$PROMPT_FILE")"
-    full_cmd="$full_cmd --file $(printf '%q' "$PLAN_FILE")"
-    full_cmd="$full_cmd -- $(printf '%q' "$instruction")"
+    # Build the agent command from user-provided AGENT_CMD.
+    # Ralph stays agent-agnostic: it appends a single instruction prompt as the final argument.
+    instruction="Read and follow .ralph/PROMPT.md. Use AGENTS.md for validation commands and .ralph/IMPLEMENTATION_PLAN.md for task selection. Do exactly one task and one local commit."
+    full_cmd="$AGENT_CMD $(printf '%q' "$instruction")"
 
     log_info "Running agent..."
     
@@ -316,17 +304,14 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         # Prefix each agent line so it doesn't visually clash with ralph logs.
         eval "$full_cmd" 2>&1 | while IFS= read -r line; do printf '%b%s\n' "$LIVE_PREFIX" "$line"; done | tee "$ITER_LOG_FILE"
         EXIT_CODE=${PIPESTATUS[0]}
-        OUTPUT=$(cat "$ITER_LOG_FILE")
     elif [[ "$VERBOSE" == true ]]; then
         # Write to log file only (no terminal stream)
         eval "$full_cmd" > "$ITER_LOG_FILE" 2>&1
         EXIT_CODE=$?
-        OUTPUT=$(cat "$ITER_LOG_FILE")
     else
-        # Capture output, write temp file for error inspection
-        OUTPUT=$(eval "$full_cmd" 2>&1)
+        # Write to log file only (keep it on errors, delete on success)
+        eval "$full_cmd" > "$ITER_LOG_FILE" 2>&1
         EXIT_CODE=$?
-        echo "$OUTPUT" > "$ITER_LOG_FILE"
     fi
     set -e
 
@@ -341,6 +326,23 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         log_error "FATAL: IMPLEMENTATION_PLAN.md was deleted during iteration!"
         log_error "This should not happen. Check log: $ITER_LOG_FILE"
         exit 1
+    fi
+    if [[ ! -f "$PROMPT_FILE" ]]; then
+        log_error "FATAL: PROMPT.md was deleted during iteration!"
+        log_error "This should not happen. Check log: $ITER_LOG_FILE"
+        exit 1
+    fi
+
+    # Protected files: only .ralph/IMPLEMENTATION_PLAN.md may be modified.
+    PROTECTED_STATUS=$(git status --porcelain -- .ralph)
+    if [[ -n "$PROTECTED_STATUS" ]]; then
+        if echo "$PROTECTED_STATUS" | grep -vq 'IMPLEMENTATION_PLAN.md$'; then
+            log_error "FATAL: Protected .ralph/ files were modified:"
+            echo "$PROTECTED_STATUS" | grep -v 'IMPLEMENTATION_PLAN.md$'
+            log_error "Only .ralph/IMPLEMENTATION_PLAN.md may be edited during the loop."
+            log_error "Check log: $ITER_LOG_FILE"
+            exit 1
+        fi
     fi
 
     if [[ $EXIT_CODE -ne 0 ]]; then
@@ -366,16 +368,6 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     # Reset consecutive failure counter on success
     CONSECUTIVE_FAILURES=0
-
-    if echo "$OUTPUT" | grep -q '<promise>COMPLETE</promise>'; then
-        echo ""
-        log_success "All tasks complete!"
-        echo ""
-        echo -e "${GREEN}${BOLD}Loop finished successfully after $i iteration(s)${NC}"
-        log_iteration_end "$i" "COMPLETE" "all tasks done" "$ITER_DURATION" "$AGENT_DURATION"
-        log_to_file "INFO" "=== LOOP COMPLETED SUCCESSFULLY ==="
-        exit 0
-    fi
 
     AFTER_HEAD=$(git rev-parse HEAD)
     log_info "HEAD after: ${DIM}${AFTER_HEAD:0:8}${NC}"
@@ -421,6 +413,20 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     COMMIT_MSG=$(git log -1 --format='%s')
     log_success "Commit created: $COMMIT_MSG"
+    
+    if grep -q '<promise>COMPLETE</promise>' "$ITER_LOG_FILE"; then
+        log_iteration_end "$i" "COMPLETE" "$COMMIT_MSG" "$ITER_DURATION" "$AGENT_DURATION"
+        if [[ "$VERBOSE" != true ]]; then
+            rm -f "$ITER_LOG_FILE"
+        fi
+        echo ""
+        log_success "All tasks complete!"
+        echo ""
+        echo -e "${GREEN}${BOLD}Loop finished successfully after $i iteration(s)${NC}"
+        log_to_file "INFO" "=== LOOP COMPLETED SUCCESSFULLY ==="
+        exit 0
+    fi
+
     log_iteration_end "$i" "SUCCESS" "$COMMIT_MSG" "$ITER_DURATION" "$AGENT_DURATION"
     
     if [[ "$VERBOSE" != true ]]; then

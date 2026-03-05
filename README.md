@@ -54,7 +54,7 @@ Create an `AGENTS.md` in your repo root with validation commands (lint, test, bu
 **5. Run the loop:**
 
 ```bash
-.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"
+.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514 -f .ralph/PROMPT.md -f .ralph/IMPLEMENTATION_PLAN.md"
 ```
 
 ---
@@ -98,17 +98,21 @@ And updates `.gitignore` to ignore `.ralph/logs/`.
 
 ## Agent compatibility
 
-Ralph works with any CLI agent that runs non-interactively. Examples:
+Ralph works with any CLI agent that runs non-interactively and accepts the prompt as the final CLI argument.
+Put model/agent params into `--agent-cmd` (Ralph does not rewrite your flags). Examples:
 
 ```bash
 # OpenCode
-.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"
+.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514 -f .ralph/PROMPT.md -f .ralph/IMPLEMENTATION_PLAN.md"
 
 # Codex
-.ralph/run.sh --agent-cmd "codex run --model anthropic/claude-opus-4-20250514"
+.ralph/run.sh --agent-cmd "codex exec --model openai/gpt-5.2 -C ."
 
 # Claude Code
-.ralph/run.sh --agent-cmd "claude --print"
+.ralph/run.sh --agent-cmd "claude -p --model sonnet"
+
+# Pi
+.ralph/run.sh --agent-cmd "pi -p --model openai/gpt-5.2 @.ralph/PROMPT.md @.ralph/IMPLEMENTATION_PLAN.md"
 ```
 
 Some agents (like OpenCode) look for an `AGENTS.md` file with validation commands. This helps them run lint/test/build checks automatically. Create one if your agent supports it.

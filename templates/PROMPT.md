@@ -20,7 +20,7 @@ Before doing anything:
 **The `.ralph/` directory is protected.** These rules are enforced:
 
 - **NEVER** delete, move, or rename any file in `.ralph/`
-- **NEVER** modify `.ralph/PROMPT.md` or `.ralph/ralph-loop.sh`
+- **NEVER** modify `.ralph/PROMPT.md` or `.ralph/run.sh`
 - You may **ONLY** edit `.ralph/IMPLEMENTATION_PLAN.md` to:
   - Mark tasks complete: `- [ ]` → `- [x]`
   - Add discovered follow-up tasks

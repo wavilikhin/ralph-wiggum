@@ -24,7 +24,7 @@ ${CYAN}${BOLD}  ____       _       _       __        ___
  |  _ < (_| | | |_) | | | |    \\ V  V / | | (_| | |_| | |_| | | | |
  |_| \\_\\__,_|_| .__/|_| |_|     \\_/\\_/  |_|\\__, |\\__,_|\\__,_|_| |_|
               |_|                          |___/                   ${RESET}
-${DIM}  Autonomous coding loop for OpenCode${RESET}
+${DIM}  Autonomous coding loop${RESET}
 `);
 }
 
@@ -64,7 +64,8 @@ ${BOLD}2.${RESET} (Optional) Customize the prompt:
    ${DIM}Edit ${CYAN}.ralph/PROMPT.md${RESET}${DIM} - mandatory sections are marked, customize the rest${RESET}
 
 ${BOLD}3.${RESET} Run the loop:
-   ${CYAN}.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514"${RESET}
+   ${CYAN}.ralph/run.sh --agent-cmd "opencode run --model anthropic/claude-opus-4-20250514 -f .ralph/PROMPT.md -f .ralph/IMPLEMENTATION_PLAN.md"${RESET}
+   ${DIM}Other agents: codex exec --model openai/gpt-5.2 -C . | claude -p --model sonnet | pi -p --model openai/gpt-5.2 @.ralph/PROMPT.md @.ralph/IMPLEMENTATION_PLAN.md${RESET}
 
 ${YELLOW}${BOLD}Important:${RESET} This tool works best with the latest generation models.
 ${DIM}Recommended: anthropic/claude-opus-4-20250514 or openai/gpt-5.2${RESET}
@@ -74,6 +75,7 @@ ${YELLOW}Available loop options:${RESET}
   --max-iterations N    Maximum iterations before stopping (default: 50)
   --verbose             Save per-iteration logs (.ralph/logs/ralph_iter_N.log)
   --live                Stream agent output to terminal (requires --verbose)
+  --strict              Exit on any iteration anomaly
 
 ${DIM}Logs are written to ${CYAN}.ralph/logs/ralph.log${RESET}${DIM} (iteration status + timings)${RESET}
 ${DIM}Verbose logs: ${CYAN}.ralph/logs/ralph_iter_N.log${RESET}${DIM} (full output per iteration, --verbose only)${RESET}

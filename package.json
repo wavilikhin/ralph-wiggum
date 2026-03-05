@@ -1,8 +1,11 @@
 {
   "name": "@wavilikhin/ralph-wiggum",
   "version": "0.2.1",
-  "description": "Autonomous coding loop for OpenCode - one task, one commit, fresh context per iteration",
+  "description": "Autonomous coding loop for CLI AI agents - one task, one commit, fresh context per iteration",
   "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
   "bin": {
     "ralph-wiggum": "src/cli.js"
   },
